@@ -14,7 +14,7 @@ type Result<T = ()> = std::result::Result<T, Box<dyn error::Error + Send + Sync>
 
 fn main() -> Result {
   match env::args().nth(1).as_deref() {
-    Some("play") => Game::new().play(),
+    Some("play") => Game::new().play(env::args().nth(2).unwrap()),
     Some("host") => Server::new().host(),
     _ => Err("invalid argument".into()),
   }
@@ -77,9 +77,9 @@ impl Game {
     }
   }
 
-  fn play(self) -> Result {
+  fn play(self,name: String) -> Result {
     let stream = TcpStream::connect(self.addr)?;
-    bincode::serialize_into(&stream, "chxry")?;
+    bincode::serialize_into(&stream, &name)?;
     let mut state = self.state.lock().unwrap();
     *state = bincode::deserialize_from(&stream)?;
     drop(state);
@@ -168,7 +168,13 @@ impl Server {
       String::from("server"),
       format!("{} connected", name),
     ))?;
-    loop {}
+    loop {
+            let len = stream.peek().expect("fart"); 
+            if len == "fart" { 
+              return Ok(());
+            }
+            
+        }
   }
 
   fn broadcast(&self, change: StateChange) -> Result {
