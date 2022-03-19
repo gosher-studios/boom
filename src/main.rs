@@ -14,20 +14,32 @@ type Result<T = ()> = std::result::Result<T, Box<dyn error::Error + Send + Sync>
 
 fn main() -> Result {
   match env::args().nth(1).as_deref() {
-    Some("play") => Boom::new().play(),
-    Some("host") => Boom::new().host(),
+    Some("play") => Game::new().play(),
+    Some("host") => Server::new().host(),
     _ => Err("invalid argument".into()),
   }
 }
 
-struct Boom {
+struct Game {
   addr: SocketAddrV4,
-  state: Arc<Mutex<State>>,
+  state: Arc<Mutex<State<String>>>,
+}
+
+#[derive(Serialize)]
+struct ServerPlayer {
+  name: String,
+  #[serde(skip_serializing)]
+  stream: TcpStream,
+}
+
+#[derive(Clone)]
+struct Server {
+  state: Arc<Mutex<State<ServerPlayer>>>,
 }
 
 #[derive(Serialize, Deserialize)]
-struct State {
-  players: Vec<String>,
+struct State<P> {
+  players: Vec<P>,
   chat: Vec<(String, String)>,
   max_players: usize,
 }
@@ -38,7 +50,7 @@ enum StateChange {
   Chat(String, String),
 }
 
-impl State {
+impl<P> State<P> {
   fn new() -> Self {
     Self {
       players: vec![],
@@ -46,7 +58,9 @@ impl State {
       max_players: 10,
     }
   }
+}
 
+impl State<String> {
   fn apply(&mut self, change: StateChange) {
     match change {
       StateChange::PlayerJoin(p) => self.players.push(p),
@@ -55,7 +69,7 @@ impl State {
   }
 }
 
-impl Boom {
+impl Game {
   fn new() -> Self {
     Self {
       addr: SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234),
@@ -119,21 +133,47 @@ impl Boom {
       }
     }
   }
+}
 
-  fn host(&mut self) -> Result {
-    let listener = TcpListener::bind(self.addr)?;
-    println!("Listening on port {}", self.addr.port());
+impl Server {
+  fn new() -> Self {
+    Self {
+      state: Arc::new(Mutex::new(State::new())),
+    }
+  }
+
+  fn host(self) -> Result {
+    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234);
+    let listener = TcpListener::bind(addr)?;
+    println!("Listening on port {}", addr.port());
     for stream in listener.incoming() {
       let stream = stream?;
-      let user: String = bincode::deserialize_from(&stream)?;
-      println!("{} connected", user);
-      let state = self.state.lock().unwrap();
-      bincode::serialize_into(&stream, &*state)?;
-      drop(state);
-      bincode::serialize_into(
-        &stream,
-        &StateChange::Chat(String::from("server"), format!("{} connected", user)),
-      )?;
+      let s = self.clone();
+      thread::spawn(move || s.handle_player(stream));
+    }
+    Ok(())
+  }
+
+  fn handle_player(&self, stream: TcpStream) -> Result {
+    let name: String = bincode::deserialize_from(&stream)?;
+    println!("{} connected", name);
+    let mut state = self.state.lock().unwrap();
+    state.players.push(ServerPlayer {
+      name: name.clone(),
+      stream: stream.try_clone()?,
+    });
+    bincode::serialize_into(&stream, &*state)?;
+    drop(state);
+    self.broadcast(StateChange::Chat(
+      String::from("server"),
+      format!("{} connected", name),
+    ))?;
+    loop {}
+  }
+
+  fn broadcast(&self, change: StateChange) -> Result {
+    for player in &self.state.lock().unwrap().players {
+      bincode::serialize_into(&player.stream, &change)?;
     }
     Ok(())
   }
