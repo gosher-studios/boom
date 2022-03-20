@@ -1,4 +1,5 @@
 use std::{io, env, thread, error, process};
+use std::time::Duration;
 use std::net::{TcpListener, TcpStream, SocketAddrV4, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 use tui::{Terminal, backend::CrosstermBackend};
@@ -46,7 +47,9 @@ struct State<P> {
 
 #[derive(Serialize, Deserialize)]
 enum StateChange {
+  None,
   PlayerJoin(String),
+  PlayerLeave(usize),
   Chat(String, String),
 }
 
@@ -63,7 +66,11 @@ impl<P> State<P> {
 impl State<String> {
   fn apply(&mut self, change: StateChange) {
     match change {
+      StateChange::None => {}
       StateChange::PlayerJoin(p) => self.players.push(p),
+      StateChange::PlayerLeave(i) => {
+        self.players.remove(i);
+      }
       StateChange::Chat(p, msg) => self.chat.push((p, msg)),
     }
   }
@@ -77,7 +84,7 @@ impl Game {
     }
   }
 
-  fn play(self,name: String) -> Result {
+  fn play(self, name: String) -> Result {
     let stream = TcpStream::connect(self.addr)?;
     bincode::serialize_into(&stream, &name)?;
     let mut state = self.state.lock().unwrap();
@@ -113,16 +120,18 @@ impl Game {
           f.render_widget(chat, chunks[1]);
         })?;
 
-        if let Event::Key(key) = event::read()? {
-          match key.code {
-            KeyCode::Char('q') => {
-              if key.modifiers.contains(KeyModifiers::CONTROL) {
-                disable_raw_mode()?;
-                crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-                process::exit(0);
+        if event::poll(Duration::from_secs(0))? {
+          if let Event::Key(key) = event::read()? {
+            match key.code {
+              KeyCode::Char('q') => {
+                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                  disable_raw_mode()?;
+                  crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+                  process::exit(0);
+                }
               }
+              _ => {}
             }
-            _ => {}
           }
         }
       }
@@ -158,28 +167,41 @@ impl Server {
     let name: String = bincode::deserialize_from(&stream)?;
     println!("{} connected", name);
     let mut state = self.state.lock().unwrap();
+    bincode::serialize_into(&stream, &*state)?;
     state.players.push(ServerPlayer {
       name: name.clone(),
       stream: stream.try_clone()?,
     });
-    bincode::serialize_into(&stream, &*state)?;
     drop(state);
+    self.broadcast(StateChange::PlayerJoin(name.clone()))?;
     self.broadcast(StateChange::Chat(
       String::from("server"),
       format!("{} connected", name),
     ))?;
     loop {
-            let len = stream.peek().expect("fart"); 
-            if len == "fart" { 
-              return Ok(());
-            }
-            
-        }
+      thread::sleep(Duration::from_secs(2));
+      self.broadcast(StateChange::None)?;
+    }
   }
 
   fn broadcast(&self, change: StateChange) -> Result {
-    for player in &self.state.lock().unwrap().players {
-      bincode::serialize_into(&player.stream, &change)?;
+    let mut disconnects = vec![];
+    let mut i = 0;
+    self.state.lock().unwrap().players.retain(|player| {
+      let o = bincode::serialize_into(&player.stream, &change).is_ok();
+      if !o {
+        disconnects.push((player.name.clone(), i));
+      }
+      i += 1;
+      o
+    });
+    for (name, i) in disconnects {
+      self.broadcast(StateChange::Chat(
+        String::from("server"),
+        format!("{} disconnected", name),
+      ))?;
+      self.broadcast(StateChange::PlayerLeave(i))?;
+      println!("{} disconnected", name);
     }
     Ok(())
   }
