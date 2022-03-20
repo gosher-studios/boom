@@ -24,6 +24,8 @@ fn main() -> Result {
 struct Game {
   addr: SocketAddrV4,
   state: Arc<Mutex<State<String>>>,
+  chat_selected: bool,
+  chat_buf: String,
 }
 
 #[derive(Serialize)]
@@ -81,10 +83,12 @@ impl Game {
     Self {
       addr: SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234),
       state: Arc::new(Mutex::new(State::new())),
+      chat_selected: false,
+      chat_buf: String::new(),
     }
   }
 
-  fn play(self, name: String) -> Result {
+  fn play(mut self, name: String) -> Result {
     let stream = TcpStream::connect(self.addr)?;
     bincode::serialize_into(&stream, &name)?;
     let mut state = self.state.lock().unwrap();
@@ -109,28 +113,50 @@ impl Game {
             .title("Boom Room - 'ctrl+q' to exit")
             .borders(Borders::ALL);
           f.render_widget(block, chunks[0]);
-          let items: Vec<ListItem> = state
+          let mut items: Vec<ListItem> = state
             .lock()
             .unwrap()
             .chat
             .iter()
             .map(|(player, msg)| ListItem::new(format!("{}: {}", player, msg)))
             .collect();
+          for _ in items.len() + 3..chunks[1].height.into() {
+            items.push(ListItem::new(" "));
+          }
+          items.push(ListItem::new(if self.chat_selected {
+            format!(">{}_", self.chat_buf)
+          } else {
+            "'enter' to chat".to_string()
+          }));
           let chat = List::new(items).block(Block::default().title("Chat").borders(Borders::ALL));
           f.render_widget(chat, chunks[1]);
         })?;
 
         if event::poll(Duration::from_secs(0))? {
           if let Event::Key(key) = event::read()? {
-            match key.code {
-              KeyCode::Char('q') => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                  disable_raw_mode()?;
-                  crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-                  process::exit(0);
+            if self.chat_selected {
+              match key.code {
+                KeyCode::Char(c) => self.chat_buf.push(c),
+                KeyCode::Backspace => {
+                  self.chat_buf.pop();
                 }
+                KeyCode::Enter => { //send message
+                }
+                KeyCode::Esc => self.chat_selected = false,
+                _ => {}
               }
-              _ => {}
+            } else {
+              match key.code {
+                KeyCode::Char('q') => {
+                  if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    disable_raw_mode()?;
+                    crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+                    process::exit(0);
+                  }
+                }
+                KeyCode::Enter => self.chat_selected = true,
+                _ => {}
+              }
             }
           }
         }
@@ -175,7 +201,7 @@ impl Server {
     drop(state);
     self.broadcast(StateChange::PlayerJoin(name.clone()))?;
     self.broadcast(StateChange::Chat(
-      String::from("server"),
+      "server".to_string(),
       format!("{} connected", name),
     ))?;
     loop {
@@ -197,7 +223,7 @@ impl Server {
     });
     for (name, i) in disconnects {
       self.broadcast(StateChange::Chat(
-        String::from("server"),
+        "server".to_string(),
         format!("{} disconnected", name),
       ))?;
       self.broadcast(StateChange::PlayerLeave(i))?;
