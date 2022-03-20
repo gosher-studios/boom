@@ -53,9 +53,8 @@ enum StateChange {
   PlayerJoin(String),
   PlayerLeave(usize),
   Chat(String, String),
-  ChatRecieve(String)
+  ChatSend(String),
 }
-
 
 impl<P> State<P> {
   fn new() -> Self {
@@ -79,16 +78,6 @@ impl State<String> {
     }
   }
 }
-impl State<ServerPlayer> {
-  fn apply(&mut self, change: StateChange) {
-    match change {
-      //todo
-      StateChange::ChatRecieve(p) => {println!("{}",p) },
-      _ => {}
-    }
-  }
-}
-
 
 impl Game {
   fn new() -> Self {
@@ -153,12 +142,9 @@ impl Game {
                 KeyCode::Backspace => {
                   self.chat_buf.pop();
                 }
-                KeyCode::Enter => { 
-                  //send message
-
-                  bincode::serialize_into(&s, &self.chat_buf)?;
+                KeyCode::Enter => {
+                  bincode::serialize_into(&s, &StateChange::ChatSend(self.chat_buf.clone()))?;
                   self.chat_buf.clear();
-
                 }
                 KeyCode::Esc => self.chat_selected = false,
                 _ => {}
@@ -224,7 +210,13 @@ impl Server {
     ))?;
     loop {
       if let Ok(change) = bincode::deserialize_from(&stream) {
-        self.state.lock().unwrap().apply(change);
+        match change {
+          StateChange::ChatSend(msg) => {
+            println!("{}: {}", name.clone(), msg);
+            self.broadcast(StateChange::Chat(name.clone(), msg))?;
+          }
+          _ => {}
+        }
       }
       //thread::sleep(Duration::from_secs(2));
       //self.broadcast(StateChange::None)?;
