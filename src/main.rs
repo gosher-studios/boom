@@ -53,7 +53,9 @@ enum StateChange {
   PlayerJoin(String),
   PlayerLeave(usize),
   Chat(String, String),
+  ChatRecieve(String)
 }
+
 
 impl<P> State<P> {
   fn new() -> Self {
@@ -68,15 +70,25 @@ impl<P> State<P> {
 impl State<String> {
   fn apply(&mut self, change: StateChange) {
     match change {
-      StateChange::None => {}
       StateChange::PlayerJoin(p) => self.players.push(p),
       StateChange::PlayerLeave(i) => {
         self.players.remove(i);
       }
       StateChange::Chat(p, msg) => self.chat.push((p, msg)),
+      _ => {}
     }
   }
 }
+impl State<ServerPlayer> {
+  fn apply(&mut self, change: StateChange) {
+    match change {
+      //todo
+      StateChange::ChatRecieve(p) => {println!("{}",p) },
+      _ => {}
+    }
+  }
+}
+
 
 impl Game {
   fn new() -> Self {
@@ -96,6 +108,7 @@ impl Game {
     drop(state);
 
     let state = self.state.clone();
+    let s = stream.try_clone()?;
     thread::spawn(move || -> Result {
       let mut stdout = io::stdout();
       enable_raw_mode()?;
@@ -140,7 +153,12 @@ impl Game {
                 KeyCode::Backspace => {
                   self.chat_buf.pop();
                 }
-                KeyCode::Enter => { //send message
+                KeyCode::Enter => { 
+                  //send message
+
+                  bincode::serialize_into(&s, &self.chat_buf)?;
+                  self.chat_buf.clear();
+
                 }
                 KeyCode::Esc => self.chat_selected = false,
                 _ => {}
@@ -205,8 +223,11 @@ impl Server {
       format!("{} connected", name),
     ))?;
     loop {
-      thread::sleep(Duration::from_secs(2));
-      self.broadcast(StateChange::None)?;
+      if let Ok(change) = bincode::deserialize_from(&stream) {
+        self.state.lock().unwrap().apply(change);
+      }
+      //thread::sleep(Duration::from_secs(2));
+      //self.broadcast(StateChange::None)?;
     }
   }
 
