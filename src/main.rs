@@ -153,11 +153,8 @@ impl Game {
                   self.chat_buf.pop();
                 }
                 KeyCode::Enter => {
-                  if self.chat_buf != "" {
-                    bincode::serialize_into(&s, &StateChange::ChatSend(self.chat_buf.clone()))?;
-                    self.chat_buf.clear();
-                  };
-                  
+                  bincode::serialize_into(&s, &StateChange::ChatSend(self.chat_buf.clone()))?;
+                  self.chat_buf.clear();
                 }
                 KeyCode::Esc => self.chat_selected = false,
                 _ => {}
@@ -235,8 +232,10 @@ impl Server {
       if let Ok(change) = bincode::deserialize_from(&stream) {
         match change {
           StateChange::ChatSend(msg) => {
-            println!("{}: {}", name.clone(), msg);
-            self.broadcast(StateChange::Chat(name.clone(), msg))?;
+            if !msg.trim().is_empty() {
+              println!("{}: {}", name.clone(), msg);
+              self.broadcast(StateChange::Chat(name.clone(), msg))?;
+            }
           }
           _ => {}
         }
