@@ -143,8 +143,11 @@ impl Game {
                   self.chat_buf.pop();
                 }
                 KeyCode::Enter => {
-                  bincode::serialize_into(&s, &StateChange::ChatSend(self.chat_buf.clone()))?;
-                  self.chat_buf.clear();
+                  if self.chat_buf != "" {
+                    bincode::serialize_into(&s, &StateChange::ChatSend(self.chat_buf.clone()))?;
+                    self.chat_buf.clear();
+                  };
+                  
                 }
                 KeyCode::Esc => self.chat_selected = false,
                 _ => {}
