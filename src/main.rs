@@ -24,6 +24,7 @@ fn main() -> Result {
 struct Game {
   addr: SocketAddrV4,
   state: Arc<Mutex<State<String>>>,
+  players_open: bool,
   chat_selected: bool,
   chat_buf: String,
 }
@@ -43,7 +44,7 @@ struct Server {
 #[derive(Serialize, Deserialize)]
 struct State<P> {
   players: Vec<P>,
-  chat: Vec<(String, String)>,
+  chat: Vec<String>,
   max_players: usize,
 }
 
@@ -66,24 +67,12 @@ impl<P> State<P> {
   }
 }
 
-impl State<String> {
-  fn apply(&mut self, change: StateChange) {
-    match change {
-      StateChange::PlayerJoin(p) => self.players.push(p),
-      StateChange::PlayerLeave(i) => {
-        self.players.remove(i);
-      }
-      StateChange::Chat(p, msg) => self.chat.push((p, msg)),
-      _ => {}
-    }
-  }
-}
-
 impl Game {
   fn new() -> Self {
     Self {
       addr: SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234),
       state: Arc::new(Mutex::new(State::new())),
+      players_open: false,
       chat_selected: false,
       chat_buf: String::new(),
     }
@@ -94,6 +83,7 @@ impl Game {
     bincode::serialize_into(&stream, &name)?;
     let mut state = self.state.lock().unwrap();
     *state = bincode::deserialize_from(&stream)?;
+    state.chat.push(format!("Connected to {}", self.addr));
     drop(state);
 
     let state = self.state.clone();
@@ -115,23 +105,43 @@ impl Game {
             .title("Boom Room - 'ctrl+q' to exit")
             .borders(Borders::ALL);
           f.render_widget(block, chunks[0]);
-          let mut items: Vec<ListItem> = state
-            .lock()
-            .unwrap()
-            .chat
-            .iter()
-            .map(|(player, msg)| ListItem::new(format!("{}: {}", player, msg)))
-            .collect();
-          for _ in items.len() + 3..chunks[1].height.into() {
-            items.push(ListItem::new(" "));
-          }
-          items.push(ListItem::new(if self.chat_selected {
-            format!(">{}_", self.chat_buf)
+
+          let side = if self.players_open {
+            let items: Vec<ListItem> = state
+              .lock()
+              .unwrap()
+              .players
+              .iter()
+              .map(|p| ListItem::new(p.clone()))
+              .collect();
+            List::new(items).block(
+              Block::default()
+                .title("Players, Chat - 'tab' to switch")
+                .borders(Borders::ALL),
+            )
           } else {
-            "'enter' to chat".to_string()
-          }));
-          let chat = List::new(items).block(Block::default().title("Chat").borders(Borders::ALL));
-          f.render_widget(chat, chunks[1]);
+            let mut items: Vec<ListItem> = state
+              .lock()
+              .unwrap()
+              .chat
+              .iter()
+              .map(|msg| ListItem::new(msg.clone()))
+              .collect();
+            for _ in items.len() + 3..chunks[1].height.into() {
+              items.push(ListItem::new(" "));
+            }
+            items.push(ListItem::new(if self.chat_selected {
+              format!(">{}_", self.chat_buf)
+            } else {
+              "'enter' to chat".to_string()
+            }));
+            List::new(items).block(
+              Block::default()
+                .title("Chat, Players - 'tab' to switch")
+                .borders(Borders::ALL),
+            )
+          };
+          f.render_widget(side, chunks[1]);
         })?;
 
         if event::poll(Duration::from_secs(0))? {
@@ -158,7 +168,8 @@ impl Game {
                     process::exit(0);
                   }
                 }
-                KeyCode::Enter => self.chat_selected = true,
+                KeyCode::Enter => self.chat_selected = !self.players_open && true,
+                KeyCode::Tab => self.players_open = !self.players_open,
                 _ => {}
               }
             }
@@ -168,7 +179,20 @@ impl Game {
     });
     loop {
       if let Ok(change) = bincode::deserialize_from(&stream) {
-        self.state.lock().unwrap().apply(change);
+        let mut state = self.state.lock().unwrap();
+        match change {
+          StateChange::PlayerJoin(p) => {
+            state.players.push(p.clone());
+            state.chat.push(format!("{} connected", p));
+          }
+          StateChange::PlayerLeave(i) => {
+            let p = state.players[i].clone();
+            state.chat.push(format!("{} disconnected", p));
+            state.players.remove(i);
+          }
+          StateChange::Chat(p, msg) => state.chat.push(format!("{}: {}", p, msg)),
+          _ => {}
+        }
       }
     }
   }
@@ -204,10 +228,6 @@ impl Server {
     });
     drop(state);
     self.broadcast(StateChange::PlayerJoin(name.clone()))?;
-    self.broadcast(StateChange::Chat(
-      "server".to_string(),
-      format!("{} connected", name),
-    ))?;
     loop {
       if let Ok(change) = bincode::deserialize_from(&stream) {
         match change {
@@ -235,10 +255,6 @@ impl Server {
       o
     });
     for (name, i) in disconnects {
-      self.broadcast(StateChange::Chat(
-        "server".to_string(),
-        format!("{} disconnected", name),
-      ))?;
       self.broadcast(StateChange::PlayerLeave(i))?;
       println!("{} disconnected", name);
     }
