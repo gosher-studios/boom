@@ -55,7 +55,7 @@ struct State<P> {
   chat: Vec<String>,
   max_players: usize,
   current_phrase: String,
-  current_player: usize
+  current_player: usize,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -74,7 +74,7 @@ impl<P> State<P> {
       chat: vec![],
       max_players: 10,
       current_phrase: String::new(),
-      current_player: 0
+      current_player: 0,
     }
   }
 }
@@ -109,19 +109,23 @@ impl Game {
 
       loop {
         terminal.draw(|f| {
+          let state = state.lock().unwrap();
           let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
             .split(f.size());
-          let block = Block::default()
-            .title("Boom Room - 'ctrl+q' to exit")
-            .borders(Borders::ALL);
-          f.render_widget(block, chunks[0]);
+            let game: Vec<ListItem> = state
+            .players
+            .iter()
+            .map(|p| ListItem::new(format!("{} - '{}'",p.name,p.buf)))
+            .collect();
+          f.render_widget(List::new(game).block(
+            Block::default()
+              .title("Boom Room - 'ctrl+q' to exit")
+              .borders(Borders::ALL)), chunks[0]);
 
           let side = if self.players_open {
             let items: Vec<ListItem> = state
-              .lock()
-              .unwrap()
               .players
               .iter()
               .map(|p| ListItem::new(p.name.clone()))
@@ -133,8 +137,6 @@ impl Game {
             )
           } else {
             let mut items: Vec<ListItem> = state
-              .lock()
-              .unwrap()
               .chat
               .iter()
               .map(|msg| ListItem::new(msg.clone()))
@@ -252,8 +254,6 @@ impl Server {
         match change {
           StateChange::ChatSend(msg) => {
             if !msg.trim().is_empty() {
-
-              
               println!("{}: {}", name.clone(), msg);
               self.broadcast(StateChange::Chat(name.clone(), msg))?;
             }
@@ -261,8 +261,6 @@ impl Server {
           _ => {}
         }
       }
-      //thread::sleep(Duration::from_secs(2));
-      //self.broadcast(StateChange::None)?;
     }
   }
 
@@ -284,6 +282,3 @@ impl Server {
     Ok(())
   }
 }
-
-
-
