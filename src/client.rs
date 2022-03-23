@@ -135,7 +135,9 @@ impl Client {
                     crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
                     process::exit(0);
                   }
-                }
+                },
+                KeyCode::Char(c) => {bincode::serialize_into(&s, &StateChange::AddLetter(c))?},
+                KeyCode::Backspace => {bincode::serialize_into(&s, &StateChange::PopLetter)?}
                 KeyCode::Enter => self.chat_selected = !self.players_open && true,
                 KeyCode::Tab => self.players_open = !self.players_open,
                 _ => {}
@@ -159,6 +161,14 @@ impl Client {
             state.players.remove(i);
           }
           StateChange::Chat(p, msg) => state.chat.push(format!("{}: {}", p, msg)),
+          StateChange::AddLetter(c) => {
+            let i = state.current_player;
+            state.players[i].buf.push(c);
+          },
+          StateChange::PopLetter => {
+            let i = state.current_player;
+            state.players[i].buf.pop();
+          }
           _ => {}
         }
       }

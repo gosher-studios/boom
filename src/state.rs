@@ -17,16 +17,20 @@ pub enum StateChange {
   PlayerLeave(usize),
   Chat(String, String),
   ChatSend(String),
+  AddLetter(char),
+  PopLetter
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ClientPlayer {
+  pub id: usize,
   pub name: String,
   pub buf: String,
 }
 
 #[derive(Serialize)]
 pub struct ServerPlayer {
+  pub id: usize,
   pub name: String,
   pub buf: String,
   #[serde(skip_serializing)]
@@ -39,7 +43,7 @@ impl<P> State<P> {
       players: vec![],
       max_players: 10,
       chat: vec![],
-      current_phrase: String::new(),
+      current_phrase: "fu".to_string(),
       current_player: 0,
     }
   }
