@@ -37,20 +37,21 @@ impl Server {
     let name: String = bincode::deserialize_from(&stream)?;
     println!("{} connected", name);
     let player = ServerPlayer {
-      id,
       name: name.clone(),
       buf: String::new(),
       stream: stream.try_clone()?,
     };
     let mut state = self.state.lock().unwrap();
     bincode::serialize_into(&stream, &*state)?;
-    state.players.push(player);
+    state.players.insert(id, player);
     drop(state);
-    self.broadcast(StateChange::PlayerJoin(ClientPlayer {
+    self.broadcast(StateChange::PlayerJoin(
       id,
-      name: name.clone(),
-      buf: String::new(),
-    }))?;
+      ClientPlayer {
+        name: name.clone(),
+        buf: String::new(),
+      },
+    ))?;
 
     loop {
       if let Ok(change) = bincode::deserialize_from(&stream) {
@@ -58,15 +59,14 @@ impl Server {
           StateChange::ChatSend(msg) => {
             if !msg.trim().is_empty() {
               println!("{}: {}", name.clone(), msg);
-              self.broadcast(StateChange::Chat(name.clone(), msg))?;
+              self.broadcast(StateChange::Chat(id, msg))?;
             }
           }
           StateChange::AddLetter(c) => {
             if c.is_alphabetic() {
               let mut state = self.state.lock().unwrap();
               if id == state.current_player {
-                let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
-                player.buf.push(c);
+                state.players.get_mut(&id).unwrap().buf.push(c);
                 drop(state);
                 self.broadcast(StateChange::AddLetter(c))?;
               }
@@ -74,31 +74,27 @@ impl Server {
           }
           StateChange::PopLetter => {
             let mut state = self.state.lock().unwrap();
-
             if id == state.current_player {
-              //CURRENT PLAYER IS CURRENTLY INDEX SHOULD BE AN ID
-              let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
-              player.buf.pop();
+              state.players.get_mut(&id).unwrap().buf.pop();
               drop(state);
-
               self.broadcast(StateChange::PopLetter)?;
             }
           }
           StateChange::Submit => {
-            let mut state = self.state.lock().unwrap();
+            // let mut state = self.state.lock().unwrap();
 
-            if id == state.current_player {
-              let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
-              if self.words.contains(&player.buf) {
-                //drop(state);
-                println!("wooo you did it it is real");
-                player.buf.clear();
-                //TODO: PUT INTO IF STATEMENT TO CHECK IF CURRENTPLAYER BECOMES NOT VALID ID
-                state.current_player += 1;
-                //TODO: broadcast later fucming retard
-                //self.broadcast(StateChange::Submit)?;
-              }
-            }
+            // if id == state.current_player {
+            //   let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
+            //   if self.words.contains(&player.buf) {
+            //     //drop(state);
+            //     println!("wooo you did it it is real");
+            //     player.buf.clear();
+            //     //TODO: PUT INTO IF STATEMENT TO CHECK IF CURRENTPLAYER BECOMES NOT VALID ID
+            //     state.current_player += 1;
+            //     //TODO: broadcast later fucming retard
+            //     //self.broadcast(StateChange::Submit)?;
+            //   }
+            // }
           }
           _ => {}
         }
@@ -108,13 +104,11 @@ impl Server {
 
   fn broadcast(&self, change: StateChange) -> Result {
     let mut disconnects = vec![];
-    let mut i = 0;
-    self.state.lock().unwrap().players.retain(|player| {
+    self.state.lock().unwrap().players.retain(|i, player| {
       let o = bincode::serialize_into(&player.stream, &change).is_ok();
       if !o {
-        disconnects.push((player.name.clone(), i));
+        disconnects.push((player.name.clone(), *i));
       }
-      i += 1;
       o
     });
     for (name, i) in disconnects {

@@ -59,7 +59,7 @@ impl Client {
           let game: Vec<ListItem> = state
             .players
             .iter()
-            .map(|p| ListItem::new(format!("{} - '{}'", p.name, p.buf)))
+            .map(|(_, p)| ListItem::new(format!("{} - '{}'", p.name, p.buf)))
             .collect();
           f.render_widget(
             List::new(game).block(
@@ -74,7 +74,7 @@ impl Client {
             let mut items: Vec<ListItem> = state
               .players
               .iter()
-              .map(|p| ListItem::new(p.name.clone()))
+              .map(|(_, p)| ListItem::new(p.name.clone()))
               .collect();
             items.insert(
               0,
@@ -101,7 +101,7 @@ impl Client {
             items.push(ListItem::new(if self.chat_selected {
               format!(">{}_", self.chat_buf)
             } else {
-              "'enter' to chat".to_string()
+              "'ctrl+t' to chat".to_string()
             }));
             List::new(items).block(
               Block::default()
@@ -128,27 +128,24 @@ impl Client {
                 _ => {}
               }
             } else {
-              match key.code {
-
-                //TODO MODIFY
-                KeyCode::Char('q') => {
-                  if key.modifiers.contains(KeyModifiers::CONTROL) {
+              if key.modifiers.contains(KeyModifiers::CONTROL) {
+                match key.code {
+                  KeyCode::Char('q') => {
                     disable_raw_mode()?;
                     crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
                     process::exit(0);
                   }
+                  KeyCode::Char('t') => self.chat_selected = !self.players_open && true,
+                  _ => {}
                 }
-                KeyCode::Char(c) => bincode::serialize_into(&s, &StateChange::AddLetter(c))?,
-                KeyCode::Backspace => bincode::serialize_into(&s, &StateChange::PopLetter)?,
-                KeyCode::Enter => {
-                  if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    self.chat_selected = !self.players_open && true
-                  } else {
-                    bincode::serialize_into(&s, &StateChange::Submit)?
-                  }
+              } else {
+                match key.code {
+                  KeyCode::Char(c) => bincode::serialize_into(&s, &StateChange::AddLetter(c))?,
+                  KeyCode::Backspace => bincode::serialize_into(&s, &StateChange::PopLetter)?,
+                  KeyCode::Enter => bincode::serialize_into(&s, &StateChange::Submit)?,
+                  KeyCode::Tab => self.players_open = !self.players_open,
+                  _ => {}
                 }
-                KeyCode::Tab => self.players_open = !self.players_open,
-                _ => {}
               }
             }
           }
@@ -159,23 +156,26 @@ impl Client {
       if let Ok(change) = bincode::deserialize_from(&stream) {
         let mut state = self.state.lock().unwrap();
         match change {
-          StateChange::PlayerJoin(p) => {
+          StateChange::PlayerJoin(i, p) => {
             state.chat.push(format!("{} connected", p.name.clone()));
-            state.players.push(p);
+            state.players.insert(i, p);
           }
           StateChange::PlayerLeave(i) => {
-            let p = state.players[i].name.clone();
+            let p = state.players.get(&i).unwrap().name.clone();
             state.chat.push(format!("{} disconnected", p));
-            state.players.remove(i);
+            state.players.remove(&i);
           }
-          StateChange::Chat(p, msg) => state.chat.push(format!("{}: {}", p, msg)),
+          StateChange::Chat(i, msg) => {
+            let p = state.players.get(&i).unwrap().name.clone();
+            state.chat.push(format!("{}: {}", p, msg))
+          }
           StateChange::AddLetter(c) => {
             let i = state.current_player;
-            state.players[i].buf.push(c);
+            state.players.get_mut(&i).unwrap().buf.push(c);
           }
           StateChange::PopLetter => {
             let i = state.current_player;
-            state.players[i].buf.pop();
+            state.players.get_mut(&i).unwrap().buf.pop();
           }
           _ => {}
         }

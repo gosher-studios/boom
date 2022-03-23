@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::net::TcpStream;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct State<P> {
-  pub players: Vec<P>,
+  pub players: HashMap<usize, P>,
   pub max_players: usize,
   pub chat: Vec<String>,
   pub current_phrase: String,
@@ -13,9 +14,9 @@ pub struct State<P> {
 #[derive(Serialize, Deserialize)]
 pub enum StateChange {
   None,
-  PlayerJoin(ClientPlayer),
+  PlayerJoin(usize, ClientPlayer),
   PlayerLeave(usize),
-  Chat(String, String),
+  Chat(usize, String),
   ChatSend(String),
   AddLetter(char),
   PopLetter,
@@ -24,14 +25,12 @@ pub enum StateChange {
 
 #[derive(Serialize, Deserialize)]
 pub struct ClientPlayer {
-  pub id: usize,
   pub name: String,
   pub buf: String,
 }
 
 #[derive(Serialize)]
 pub struct ServerPlayer {
-  pub id: usize,
   pub name: String,
   pub buf: String,
   #[serde(skip_serializing)]
@@ -41,7 +40,7 @@ pub struct ServerPlayer {
 impl<P> State<P> {
   pub fn new() -> Self {
     Self {
-      players: vec![],
+      players: HashMap::new(),
       max_players: 10,
       chat: vec![],
       current_phrase: "fu".to_string(),
