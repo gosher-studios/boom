@@ -1,12 +1,9 @@
 use std::thread;
-use std:: sync::atomic::{AtomicUsize,Ordering};
 use std::net::{TcpListener, TcpStream, SocketAddrV4, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 
 use crate::state::{State, StateChange, ServerPlayer, ClientPlayer};
 use crate::Result;
-
-static ID: AtomicUsize = AtomicUsize::new(1);
 
 #[derive(Clone)]
 pub struct Server {
@@ -28,17 +25,16 @@ impl Server {
     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234);
     let listener = TcpListener::bind(addr)?;
     println!("Listening on port {}", addr.port());
-    for stream in listener.incoming() {
+    for (id,stream) in listener.incoming().enumerate() {
       let stream = stream?;
       let s = self.clone();
-      thread::spawn(move || s.handle_player(stream));
+      thread::spawn(move || s.handle_player(stream,id));
     }
     Ok(())
   }
 
-  fn handle_player(&self, stream: TcpStream) -> Result {
+  fn handle_player(&self, stream: TcpStream,id: usize) -> Result {
     let name: String = bincode::deserialize_from(&stream)?;
-    let id = ID.fetch_add(1,Ordering::Relaxed);
     println!("{} connected", name);
     let player = ServerPlayer {
       id,
@@ -72,10 +68,12 @@ impl Server {
 
               let mut state = self.state.lock().unwrap();
               let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
+              // we are big dumb stupid, basically why the fuck are we doing it on same thread id = player id so like waht the fuck fuck me in the ass fucmking
               if id == player.id{
                 player.buf.push(c);
+                drop(state);
                 self.broadcast(StateChange::AddLetter(c))?;
-              };
+              }
             }
           }
           StateChange::PopLetter => {
@@ -83,6 +81,9 @@ impl Server {
             let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
             if id == player.id {
               player.buf.pop();
+              println!("{}{}",id,player.id);
+              drop(state);
+              
               self.broadcast(StateChange::PopLetter)?;
             }
             
