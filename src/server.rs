@@ -9,7 +9,7 @@ use crate::Result;
 pub struct Server {
   state: Arc<Mutex<State<ServerPlayer>>>,
   words: Arc<Vec<String>>,
-  phrases: Arc<Vec<String>>
+  phrases: Arc<Vec<String>>,
 }
 
 impl Server {
@@ -17,7 +17,7 @@ impl Server {
     Self {
       state: Arc::new(Mutex::new(State::new())),
       words: Arc::new(serde_json::from_str(include_str!("words.json")).unwrap()),
-      phrases: Arc::new(serde_json::from_str(include_str!("phrases.json")).unwrap())
+      phrases: Arc::new(serde_json::from_str(include_str!("phrases.json")).unwrap()),
     }
   }
 
@@ -25,15 +25,15 @@ impl Server {
     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234);
     let listener = TcpListener::bind(addr)?;
     println!("Listening on port {}", addr.port());
-    for (id,stream) in listener.incoming().enumerate() {
+    for (id, stream) in listener.incoming().enumerate() {
       let stream = stream?;
       let s = self.clone();
-      thread::spawn(move || s.handle_player(stream,id));
+      thread::spawn(move || s.handle_player(stream, id));
     }
     Ok(())
   }
 
-  fn handle_player(&self, stream: TcpStream,id: usize) -> Result {
+  fn handle_player(&self, stream: TcpStream, id: usize) -> Result {
     let name: String = bincode::deserialize_from(&stream)?;
     println!("{} connected", name);
     let player = ServerPlayer {
@@ -63,13 +63,9 @@ impl Server {
           }
           StateChange::AddLetter(c) => {
             if c.is_alphabetic() {
-              //check if currentplayer
-              // what the fuck
-
               let mut state = self.state.lock().unwrap();
-              let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
-              // we are big dumb stupid, basically why the fuck are we doing it on same thread id = player id so like waht the fuck fuck me in the ass fucmking
-              if id == player.id{
+              if id == state.current_player {
+                let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
                 player.buf.push(c);
                 drop(state);
                 self.broadcast(StateChange::AddLetter(c))?;
@@ -78,15 +74,31 @@ impl Server {
           }
           StateChange::PopLetter => {
             let mut state = self.state.lock().unwrap();
-            let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
-            if id == player.id {
+
+            if id == state.current_player {
+              //CURRENT PLAYER IS CURRENTLY INDEX SHOULD BE AN ID
+              let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
               player.buf.pop();
-              println!("{}{}",id,player.id);
               drop(state);
-              
+
               self.broadcast(StateChange::PopLetter)?;
             }
-            
+          }
+          StateChange::Submit => {
+            let mut state = self.state.lock().unwrap();
+
+            if id == state.current_player {
+              let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
+              if self.words.contains(&player.buf) {
+                //drop(state);
+                println!("wooo you did it it is real");
+                player.buf.clear();
+                //TODO: PUT INTO IF STATEMENT TO CHECK IF CURRENTPLAYER BECOMES NOT VALID ID
+                state.current_player += 1;
+                //TODO: broadcast later fucming retard
+                //self.broadcast(StateChange::Submit)?;
+              }
+            }
           }
           _ => {}
         }

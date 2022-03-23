@@ -18,7 +18,8 @@ pub enum StateChange {
   Chat(String, String),
   ChatSend(String),
   AddLetter(char),
-  PopLetter
+  PopLetter,
+  Submit,
 }
 
 #[derive(Serialize, Deserialize)]

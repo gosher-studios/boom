@@ -129,16 +129,24 @@ impl Client {
               }
             } else {
               match key.code {
+
+                //TODO MODIFY
                 KeyCode::Char('q') => {
                   if key.modifiers.contains(KeyModifiers::CONTROL) {
                     disable_raw_mode()?;
                     crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
                     process::exit(0);
                   }
-                },
-                KeyCode::Char(c) => {bincode::serialize_into(&s, &StateChange::AddLetter(c))?},
-                KeyCode::Backspace => {bincode::serialize_into(&s, &StateChange::PopLetter)?}
-                KeyCode::Enter => self.chat_selected = !self.players_open && true,
+                }
+                KeyCode::Char(c) => bincode::serialize_into(&s, &StateChange::AddLetter(c))?,
+                KeyCode::Backspace => bincode::serialize_into(&s, &StateChange::PopLetter)?,
+                KeyCode::Enter => {
+                  if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    self.chat_selected = !self.players_open && true
+                  } else {
+                    bincode::serialize_into(&s, &StateChange::Submit)?
+                  }
+                }
                 KeyCode::Tab => self.players_open = !self.players_open,
                 _ => {}
               }
@@ -164,7 +172,7 @@ impl Client {
           StateChange::AddLetter(c) => {
             let i = state.current_player;
             state.players[i].buf.push(c);
-          },
+          }
           StateChange::PopLetter => {
             let i = state.current_player;
             state.players[i].buf.pop();
