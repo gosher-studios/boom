@@ -1,7 +1,7 @@
 use std::thread;
 use std::net::{TcpListener, TcpStream, SocketAddrV4, Ipv4Addr};
 use std::sync::{Arc, Mutex};
-
+use rand::seq::SliceRandom;
 use crate::state::{State, StateChange, ServerPlayer, ClientPlayer};
 use crate::Result;
 
@@ -95,6 +95,19 @@ impl Server {
             //     //self.broadcast(StateChange::Submit)?;
             //   }
             // }
+            // error fix later
+            let mut state = self.state.lock().unwrap();
+            let fart = self.phrases.choose(&mut rand::thread_rng());
+           
+            state.current_phrase = fart.unwrap().to_string() ;
+           
+            
+            println!("{:?}",fart);
+
+            
+            
+            
+
           }
           _ => {}
         }
