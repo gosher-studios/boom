@@ -21,6 +21,8 @@ pub enum StateChange {
   AddLetter(char),
   PopLetter,
   Submit,
+  NextPlayer(usize, String),
+  Fail,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -38,12 +40,12 @@ pub struct ServerPlayer {
 }
 
 impl<P> State<P> {
-  pub fn new() -> Self {
+  pub fn new(phrase: String) -> Self {
     Self {
       players: HashMap::new(),
       max_players: 10,
       chat: vec![],
-      current_phrase: "fu".to_string(),
+      current_phrase: phrase,
       current_player: 0,
     }
   }

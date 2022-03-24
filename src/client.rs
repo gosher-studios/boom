@@ -25,7 +25,7 @@ impl Client {
   pub fn new() -> Self {
     Self {
       addr: SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234),
-      state: Arc::new(Mutex::new(State::new())),
+      state: Arc::new(Mutex::new(State::new(String::new()))),
       players_open: false,
       chat_selected: false,
       chat_buf: String::new(),
@@ -56,11 +56,19 @@ impl Client {
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
             .split(f.size());
-          let game: Vec<ListItem> = state
+          let mut game: Vec<ListItem> = state
             .players
             .iter()
-            .map(|(_, p)| ListItem::new(format!("{} - '{}'", p.name, p.buf)))
+            .map(|(i, p)| {
+              ListItem::new(format!(
+                "{}{} - '{}'",
+                if state.current_player == *i { "> " } else { "" },
+                p.name,
+                p.buf
+              ))
+            })
             .collect();
+          game.insert(0, ListItem::new(format!(">> {} <<", state.current_phrase)));
           f.render_widget(
             List::new(game).block(
               Block::default()
@@ -176,6 +184,14 @@ impl Client {
           StateChange::PopLetter => {
             let i = state.current_player;
             state.players.get_mut(&i).unwrap().buf.pop();
+          }
+          StateChange::NextPlayer(i, phrase) => {
+            state.current_player = i;
+            state.current_phrase = phrase;
+          }
+          StateChange::Fail => {
+            let i = state.current_player;
+            state.players.get_mut(&i).unwrap().buf.clear();
           }
           _ => {}
         }

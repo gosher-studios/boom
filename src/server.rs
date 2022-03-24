@@ -14,10 +14,13 @@ pub struct Server {
 
 impl Server {
   pub fn new() -> Self {
+    let phrases: Vec<String> = serde_json::from_str(include_str!("phrases.json")).unwrap();
     Self {
-      state: Arc::new(Mutex::new(State::new())),
+      state: Arc::new(Mutex::new(State::new(
+        phrases.choose(&mut rand::thread_rng()).unwrap().to_string(),
+      ))),
       words: Arc::new(serde_json::from_str(include_str!("words.json")).unwrap()),
-      phrases: Arc::new(serde_json::from_str(include_str!("phrases.json")).unwrap()),
+      phrases: Arc::new(phrases),
     }
   }
 
@@ -81,33 +84,30 @@ impl Server {
             }
           }
           StateChange::Submit => {
-            // let mut state = self.state.lock().unwrap();
-
-            // if id == state.current_player {
-            //   let player = state.players.iter_mut().find(|x| x.id == id).unwrap();
-            //   if self.words.contains(&player.buf) {
-            //     //drop(state);
-            //     println!("wooo you did it it is real");
-            //     player.buf.clear();
-            //     //TODO: PUT INTO IF STATEMENT TO CHECK IF CURRENTPLAYER BECOMES NOT VALID ID
-            //     state.current_player += 1;
-            //     //TODO: broadcast later fucming retard
-            //     //self.broadcast(StateChange::Submit)?;
-            //   }
-            // }
-            // error fix later
             let mut state = self.state.lock().unwrap();
-            let fart = self.phrases.choose(&mut rand::thread_rng());
-           
-            state.current_phrase = fart.unwrap().to_string() ;
-           
-            
-            println!("{:?}",fart);
-
-            
-            
-            
-
+            if id == state.current_player {
+              if state
+                .players
+                .get(&id)
+                .unwrap()
+                .buf
+                .contains(&state.current_phrase)
+              {
+                let phrase = self
+                  .phrases
+                  .choose(&mut rand::thread_rng())
+                  .unwrap()
+                  .to_string();
+                state.current_player = 0;
+                state.current_phrase = phrase.clone();
+                drop(state);
+                self.broadcast(StateChange::NextPlayer(0, phrase))?;
+              } else {
+                state.players.get_mut(&id).unwrap().buf.clear();
+                drop(state);
+                self.broadcast(StateChange::Fail)?;
+              }
+            }
           }
           _ => {}
         }
