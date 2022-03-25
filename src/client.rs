@@ -1,6 +1,6 @@
 use std::{io, thread, process};
 use std::time::Duration;
-use std::net::{TcpStream, SocketAddrV4, Ipv4Addr};
+use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use tui::{Terminal, backend::CrosstermBackend};
 use tui::widgets::{Block, Borders, List, ListItem};
@@ -14,7 +14,6 @@ use crate::state::{State, StateChange, ClientPlayer};
 use crate::Result;
 
 pub struct Client {
-  addr: SocketAddrV4,
   state: Arc<Mutex<State<ClientPlayer>>>,
   players_open: bool,
   chat_selected: bool,
@@ -24,7 +23,6 @@ pub struct Client {
 impl Client {
   pub fn new() -> Self {
     Self {
-      addr: SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234),
       state: Arc::new(Mutex::new(State::new(String::new()))),
       players_open: false,
       chat_selected: false,
@@ -33,11 +31,13 @@ impl Client {
   }
 
   pub fn play(mut self, name: String) -> Result {
-    let stream = TcpStream::connect(self.addr)?;
+    let stream = TcpStream::connect("localhost:1234")?;
     bincode::serialize_into(&stream, &name)?;
     let mut state = self.state.lock().unwrap();
     *state = bincode::deserialize_from(&stream)?;
-    state.chat.push(format!("Connected to {}", self.addr));
+    state
+      .chat
+      .push(format!("Connected to {}", stream.peer_addr()?));
     drop(state);
 
     let state = self.state.clone();
