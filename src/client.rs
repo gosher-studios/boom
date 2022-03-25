@@ -188,6 +188,7 @@ impl Client {
           StateChange::NextPlayer(i, phrase) => {
             state.current_player = i;
             state.current_phrase = phrase;
+            state.players.get_mut(&i).unwrap().buf.clear();
           }
           StateChange::Fail => {
             let i = state.current_player;

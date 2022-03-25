@@ -98,10 +98,19 @@ impl Server {
                   .choose(&mut rand::thread_rng())
                   .unwrap()
                   .to_string();
-                state.current_player = 0;
+                let mut iter = state.players.iter();
+                let i = iter
+                  .position(|(id, _)| *id == state.current_player)
+                  .unwrap();
+                let next = match iter.nth(i + 1) {
+                  Some(i) => *i.0,
+                  None => 0,
+                };
+                state.current_player = next;
                 state.current_phrase = phrase.clone();
+                state.players.get_mut(&next).unwrap().buf.clear();
                 drop(state);
-                self.broadcast(StateChange::NextPlayer(0, phrase))?;
+                self.broadcast(StateChange::NextPlayer(next, phrase))?;
               } else {
                 state.players.get_mut(&id).unwrap().buf.clear();
                 drop(state);
