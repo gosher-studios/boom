@@ -98,11 +98,12 @@ impl Server {
                   .choose(&mut rand::thread_rng())
                   .unwrap()
                   .to_string();
-                let mut iter = state.players.iter();
-                let i = iter
+                let i = state
+                  .players
+                  .iter()
                   .position(|(id, _)| *id == state.current_player)
                   .unwrap();
-                let next = match iter.nth(i + 1) {
+                let next = match state.players.iter().nth(i + 1) {
                   Some(i) => *i.0,
                   None => 0,
                 };

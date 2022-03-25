@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::net::TcpStream;
 use serde::{Serialize, Deserialize};
+use chrono::prelude::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct State<P> {
@@ -9,6 +10,7 @@ pub struct State<P> {
   pub chat: Vec<String>,
   pub current_phrase: String,
   pub current_player: usize,
+  pub timer: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -47,6 +49,7 @@ impl<P> State<P> {
       chat: vec![],
       current_phrase: phrase,
       current_player: 0,
+      timer: Utc::now(),
     }
   }
 }

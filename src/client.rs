@@ -9,6 +9,7 @@ use crossterm::terminal::{
   enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use chrono::prelude::*;
 
 use crate::state::{State, StateChange, ClientPlayer};
 use crate::Result;
@@ -68,7 +69,16 @@ impl Client {
               ))
             })
             .collect();
-          game.insert(0, ListItem::new(format!(">> {} <<", state.current_phrase)));
+          let timer = Utc::now() - state.timer;
+          game.insert(
+            0,
+            ListItem::new(format!(
+              ">> {} << - {:02}:{:.2}",
+              state.current_phrase,
+              timer.num_seconds(),
+              timer.num_milliseconds().to_string()
+            )),
+          );
           f.render_widget(
             List::new(game).block(
               Block::default()
