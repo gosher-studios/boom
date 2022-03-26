@@ -4,7 +4,7 @@ use std::net::{TcpListener, TcpStream, SocketAddrV4, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 use rand::seq::SliceRandom;
 use chrono::{Utc, Duration};
-use crate::state::{State, StateChange, ServerPlayer, ClientPlayer};
+use crate::state::{State, StateChange, ServerPlayer};
 use crate::Result;
 
 #[derive(Clone)]
@@ -43,7 +43,7 @@ impl Server {
   fn game_manager(&self) -> Result {
     loop {
       let mut state = self.state.lock().unwrap();
-      if Utc::now() - state.timer > Duration::seconds(15) {
+      if Utc::now() - state.timer > Duration::seconds(state.timer_length) {
         let i = state.current_player;
         state.timer = Utc::now();
         state.players.get_mut(&i).unwrap().lives -= 1; //TODO: die
@@ -62,24 +62,19 @@ impl Server {
   fn handle_player(&self, stream: TcpStream, id: usize) -> Result {
     let name: String = bincode::deserialize_from(&stream)?;
     println!("{} connected", name);
+    let mut state = self.state.lock().unwrap();
     let player = ServerPlayer {
       name: name.clone(),
       buf: String::new(),
-      lives: 3,
+      lives: state.lives,
       stream: stream.try_clone()?,
     };
-    let mut state = self.state.lock().unwrap();
+    let cplayer = player.to_clientplayer();
+    bincode::serialize_into(&stream, &id)?;
     bincode::serialize_into(&stream, &*state)?;
     state.players.insert(id, player);
     drop(state);
-    self.broadcast(StateChange::PlayerJoin(
-      id,
-      ClientPlayer {
-        name: name.clone(),
-        buf: String::new(),
-        lives: 3,
-      },
-    ))?;
+    self.broadcast(StateChange::PlayerJoin(id, cplayer))?;
 
     loop {
       if let Ok(change) = bincode::deserialize_from(&stream) {
@@ -122,6 +117,7 @@ impl Server {
                 state.current_player = next;
                 state.current_phrase = phrase.clone();
                 state.players.get_mut(&next).unwrap().buf.clear();
+                state.timer = state.timer + Duration::seconds(state.time_increase);
                 drop(state);
                 self.broadcast(StateChange::NextPlayer(next, phrase))?;
               } else {

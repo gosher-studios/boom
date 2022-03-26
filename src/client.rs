@@ -1,5 +1,4 @@
 use std::{io, thread, process};
-use std::time::Duration;
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use tui::{Terminal, backend::CrosstermBackend};
@@ -9,7 +8,7 @@ use crossterm::terminal::{
   enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use chrono::prelude::*;
+use chrono::{Utc, Duration};
 
 use crate::state::{State, StateChange, ClientPlayer};
 use crate::Result;
@@ -35,6 +34,7 @@ impl Client {
     let stream = TcpStream::connect("localhost:1234")?;
     bincode::serialize_into(&stream, &name)?;
     let mut state = self.state.lock().unwrap();
+    let id: usize = bincode::deserialize_from(&stream)?;
     *state = bincode::deserialize_from(&stream)?;
     state
       .chat
@@ -62,16 +62,21 @@ impl Client {
             .iter()
             .map(|(i, p)| {
               ListItem::new(format!(
-                "{}{}{}{} - '{}'",
+                "{}{}{}- '{}' {}{}",
                 "♥ ".repeat(p.lives.into()),
-                "♡ ".repeat((3 - p.lives).into()),
-                if state.current_player == *i { "> " } else { "" },
+                "♡ ".repeat((state.lives - p.lives).into()),
                 p.name,
-                p.buf
+                p.buf,
+                if state.current_player == *i { "<<" } else { "" },
+                if state.current_player == *i && state.current_player == id {
+                  " YOU"
+                } else {
+                  ""
+                },
               ))
             })
             .collect();
-          let timer = Utc::now() - state.timer;
+          let timer = state.timer - Utc::now() + Duration::seconds(state.timer_length);
           game.insert(
             0,
             ListItem::new(format!(
@@ -132,7 +137,7 @@ impl Client {
           f.render_widget(side, chunks[1]);
         })?;
 
-        if event::poll(Duration::from_secs(0))? {
+        if event::poll(Duration::zero().to_std()?)? {
           if let Event::Key(key) = event::read()? {
             if self.chat_selected {
               match key.code {
@@ -200,6 +205,7 @@ impl Client {
           StateChange::NextPlayer(i, phrase) => {
             state.current_player = i;
             state.current_phrase = phrase;
+            state.timer = state.timer + Duration::seconds(state.time_increase);
             state.players.get_mut(&i).unwrap().buf.clear();
           }
           StateChange::Incorrect => {

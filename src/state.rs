@@ -6,11 +6,15 @@ use chrono::{DateTime, Utc};
 #[derive(Serialize, Deserialize)]
 pub struct State<P> {
   pub players: HashMap<usize, P>,
-  pub max_players: usize,
   pub chat: Vec<String>,
   pub current_phrase: String,
   pub current_player: usize,
   pub timer: DateTime<Utc>,
+  /// v settings v
+  pub max_players: usize,
+  pub timer_length: i64,
+  pub time_increase: i64,
+  pub lives: u8,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -28,13 +32,6 @@ pub enum StateChange {
   Fail(usize),
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct ClientPlayer {
-  pub name: String,
-  pub buf: String,
-  pub lives: u8,
-}
-
 #[derive(Serialize)]
 pub struct ServerPlayer {
   pub name: String,
@@ -44,15 +41,35 @@ pub struct ServerPlayer {
   pub stream: TcpStream,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct ClientPlayer {
+  pub name: String,
+  pub buf: String,
+  pub lives: u8,
+}
+
 impl<P> State<P> {
   pub fn new(phrase: String) -> Self {
     Self {
       players: HashMap::new(),
-      max_players: 10,
       chat: vec![],
       current_phrase: phrase,
       current_player: 0,
       timer: Utc::now(),
+      max_players: 10,
+      timer_length: 10,
+      time_increase: 1,
+      lives: 3,
+    }
+  }
+}
+
+impl ServerPlayer {
+  pub fn to_clientplayer(&self) -> ClientPlayer {
+    ClientPlayer {
+      name: self.name.clone(),
+      buf: self.buf.clone(),
+      lives: self.lives,
     }
   }
 }
