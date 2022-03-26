@@ -62,7 +62,9 @@ impl Client {
             .iter()
             .map(|(i, p)| {
               ListItem::new(format!(
-                "{}{} - '{}'",
+                "{}{}{}{} - '{}'",
+                "♥ ".repeat(p.lives.into()),
+                "♡ ".repeat((3 - p.lives).into()),
                 if state.current_player == *i { "> " } else { "" },
                 p.name,
                 p.buf
@@ -76,7 +78,7 @@ impl Client {
               ">> {} << - {:02}:{:.2}",
               state.current_phrase,
               timer.num_seconds(),
-              timer.num_milliseconds().to_string()
+              (timer.num_milliseconds() - timer.num_seconds() * 1000).to_string()
             )),
           );
           f.render_widget(
@@ -200,9 +202,15 @@ impl Client {
             state.current_phrase = phrase;
             state.players.get_mut(&i).unwrap().buf.clear();
           }
-          StateChange::Fail => {
+          StateChange::Incorrect => {
             let i = state.current_player;
             state.players.get_mut(&i).unwrap().buf.clear();
+          }
+          StateChange::Fail(next) => {
+            let i = state.current_player;
+            state.timer = Utc::now();
+            state.players.get_mut(&i).unwrap().lives -= 1;
+            state.current_player = next;
           }
           _ => {}
         }

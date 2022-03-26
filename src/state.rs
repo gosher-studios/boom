@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::TcpStream;
 use serde::{Serialize, Deserialize};
-use chrono::prelude::*;
+use chrono::{DateTime, Utc};
 
 #[derive(Serialize, Deserialize)]
 pub struct State<P> {
@@ -24,19 +24,22 @@ pub enum StateChange {
   PopLetter,
   Submit,
   NextPlayer(usize, String),
-  Fail,
+  Incorrect,
+  Fail(usize),
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ClientPlayer {
   pub name: String,
   pub buf: String,
+  pub lives: u8,
 }
 
 #[derive(Serialize)]
 pub struct ServerPlayer {
   pub name: String,
   pub buf: String,
+  pub lives: u8,
   #[serde(skip_serializing)]
   pub stream: TcpStream,
 }

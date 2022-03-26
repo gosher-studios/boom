@@ -1,7 +1,9 @@
 use std::thread;
+use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream, SocketAddrV4, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 use rand::seq::SliceRandom;
+use chrono::{Utc, Duration};
 use crate::state::{State, StateChange, ServerPlayer, ClientPlayer};
 use crate::Result;
 
@@ -28,6 +30,8 @@ impl Server {
     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234);
     let listener = TcpListener::bind(addr)?;
     println!("Listening on port {}", addr.port());
+    let s = self.clone();
+    thread::spawn(move || s.game_manager());
     for (id, stream) in listener.incoming().enumerate() {
       let stream = stream?;
       let s = self.clone();
@@ -36,12 +40,32 @@ impl Server {
     Ok(())
   }
 
+  fn game_manager(&self) -> Result {
+    loop {
+      let mut state = self.state.lock().unwrap();
+      if Utc::now() - state.timer > Duration::seconds(15) {
+        let i = state.current_player;
+        state.timer = Utc::now();
+        state.players.get_mut(&i).unwrap().lives -= 1; //TODO: die
+        let next = next_player(&state.players, state.current_player);
+        state.current_player = next;
+        drop(state);
+        self.broadcast(StateChange::Fail(next))?;
+      } else {
+        drop(state);
+      }
+      self.broadcast(StateChange::None)?;
+      thread::sleep(Duration::milliseconds(10).to_std()?);
+    }
+  }
+
   fn handle_player(&self, stream: TcpStream, id: usize) -> Result {
     let name: String = bincode::deserialize_from(&stream)?;
     println!("{} connected", name);
     let player = ServerPlayer {
       name: name.clone(),
       buf: String::new(),
+      lives: 3,
       stream: stream.try_clone()?,
     };
     let mut state = self.state.lock().unwrap();
@@ -53,6 +77,7 @@ impl Server {
       ClientPlayer {
         name: name.clone(),
         buf: String::new(),
+        lives: 3,
       },
     ))?;
 
@@ -86,27 +111,14 @@ impl Server {
           StateChange::Submit => {
             let mut state = self.state.lock().unwrap();
             if id == state.current_player {
-              if state
-                .players
-                .get(&id)
-                .unwrap()
-                .buf
-                .contains(&state.current_phrase)
-              {
+              let buf = &state.players.get(&id).unwrap().buf;
+              if buf.contains(&state.current_phrase) && self.words.contains(buf) {
                 let phrase = self
                   .phrases
                   .choose(&mut rand::thread_rng())
                   .unwrap()
                   .to_string();
-                let i = state
-                  .players
-                  .iter()
-                  .position(|(id, _)| *id == state.current_player)
-                  .unwrap();
-                let next = match state.players.iter().nth(i + 1) {
-                  Some(i) => *i.0,
-                  None => 0,
-                };
+                let next = next_player(&state.players, state.current_player);
                 state.current_player = next;
                 state.current_phrase = phrase.clone();
                 state.players.get_mut(&next).unwrap().buf.clear();
@@ -115,7 +127,7 @@ impl Server {
               } else {
                 state.players.get_mut(&id).unwrap().buf.clear();
                 drop(state);
-                self.broadcast(StateChange::Fail)?;
+                self.broadcast(StateChange::Incorrect)?;
               }
             }
           }
@@ -139,5 +151,13 @@ impl Server {
       println!("{} disconnected", name);
     }
     Ok(())
+  }
+}
+
+fn next_player(players: &HashMap<usize, ServerPlayer>, current: usize) -> usize {
+  let i = players.iter().position(|(id, _)| *id == current).unwrap();
+  match players.iter().nth(i + 1) {
+    Some(i) => *i.0,
+    None => 0,
   }
 }
