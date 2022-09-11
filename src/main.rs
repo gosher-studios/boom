@@ -2,6 +2,7 @@ mod client;
 mod menu;
 mod server;
 mod state;
+
 use std::{env, error};
 use client::Client;
 use server::Server;

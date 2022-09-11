@@ -9,7 +9,6 @@ use crossterm::terminal::{
 };
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use chrono::{Utc, Duration};
-
 use crate::state::{State, StateChange, ClientPlayer};
 use crate::Result;
 
