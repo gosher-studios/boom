@@ -32,7 +32,7 @@ pub enum StateChange {
   Fail(usize),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ServerPlayer {
   pub name: String,
   pub buf: String,

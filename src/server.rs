@@ -26,10 +26,10 @@ impl Server {
     }
   }
 
-  pub fn host(self) -> Result {
-    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1234);
+  pub fn host(self, port: u16) -> Result {
+    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
     let listener = TcpListener::bind(addr)?;
-    println!("Listening on port {}", addr.port());
+    println!("Listening on port {}", port);
     let s = self.clone();
     thread::spawn(move || s.game_manager());
     for (id, stream) in listener.incoming().enumerate() {
@@ -151,9 +151,16 @@ impl Server {
 }
 
 fn next_player(players: &HashMap<usize, ServerPlayer>, current: usize) -> usize {
-  let i = players.iter().position(|(id, _)| *id == current).unwrap();
-  match players.iter().nth(i + 1) {
-    Some(i) => *i.0,
-    None => 0,
+  let mut iter = players.iter();
+  iter.nth(players.iter().position(|(id, _)| *id == current).unwrap());
+  loop {
+    match iter.next() {
+      Some((id, p)) => {
+        if p.lives > 0 {
+          return *id;
+        }
+      }
+      None => return 0,
+    }
   }
 }

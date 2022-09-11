@@ -10,8 +10,11 @@ pub type Result<T = ()> = std::result::Result<T, Box<dyn error::Error + Send + S
 
 fn main() -> Result {
   match env::args().nth(1).as_deref() {
-    Some("play") => Client::new().play(env::args().nth(2).unwrap()),
-    Some("host") => Server::new().host(),
+    Some("play") => match env::args().nth(2) {
+      Some(name) => Client::new().play(name),
+      None => Err("no username".into()),
+    },
+    Some("host") => Server::new().host(1234),
     _ => Err("invalid argument".into()),
   }
 }

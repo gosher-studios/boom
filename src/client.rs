@@ -61,19 +61,24 @@ impl Client {
             .players
             .iter()
             .map(|(i, p)| {
-              ListItem::new(format!(
-                "{}{}{}- '{}' {}{}",
-                "♥ ".repeat(p.lives.into()),
-                "♡ ".repeat((state.lives - p.lives).into()),
-                p.name,
-                p.buf,
-                if state.current_player == *i { "<<" } else { "" },
-                if state.current_player == *i && state.current_player == id {
-                  " YOU"
-                } else {
-                  ""
-                },
-              ))
+              if p.lives == 0 {
+                let space = " ".repeat((state.lives / 2).into());
+                ListItem::new(format!("{}☠{}- {}", space, space, p.name))
+              } else {
+                ListItem::new(format!(
+                  "{}{}{}- '{}' {}{}",
+                  "♥ ".repeat(p.lives.into()),
+                  "♡ ".repeat((state.lives - p.lives).into()),
+                  p.name,
+                  p.buf,
+                  if state.current_player == *i { "<<" } else { "" },
+                  if state.current_player == *i && state.current_player == id {
+                    " YOU"
+                  } else {
+                    ""
+                  },
+                ))
+              }
             })
             .collect();
           let timer = state.timer - Utc::now() + Duration::seconds(state.timer_length);
@@ -207,16 +212,19 @@ impl Client {
             state.current_phrase = phrase;
             state.timer = state.timer + Duration::seconds(state.time_increase);
             state.players.get_mut(&i).unwrap().buf.clear();
+            state.chat.push(format!("next player {}", i)); // remove
           }
           StateChange::Incorrect => {
             let i = state.current_player;
             state.players.get_mut(&i).unwrap().buf.clear();
+            state.chat.push("incorrect guess!".into()); // remove
           }
           StateChange::Fail(next) => {
             let i = state.current_player;
             state.timer = Utc::now();
             state.players.get_mut(&i).unwrap().lives -= 1;
             state.current_player = next;
+            state.chat.push(format!("failed! {}", next)); // remove
           }
           _ => {}
         }
