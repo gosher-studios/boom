@@ -12,7 +12,6 @@ pub struct Server {
   state: Arc<Mutex<State<ServerPlayer>>>,
   words: Arc<Vec<String>>,
   phrases: Arc<Vec<String>>,
-  usedwords: Arc<Mutex<Vec<String>>>,
 }
 
 impl Server {
@@ -24,7 +23,6 @@ impl Server {
       ))),
       words: Arc::new(serde_json::from_str(include_str!("words.json")).unwrap()),
       phrases: Arc::new(phrases),
-      usedwords: Arc::new(Mutex::new(vec![]))
     }
   }
 
@@ -48,7 +46,7 @@ impl Server {
       if Utc::now() - state.timer > Duration::seconds(state.timer_length) {
         let i = state.current_player;
         state.timer = Utc::now();
-        state.players.get_mut(&i).unwrap().lives -= 1;
+        state.players.get_mut(&i).unwrap().lives -= 1; //TODO: die
         let next = next_player(&state.players, state.current_player);
         state.current_player = next;
         drop(state);
@@ -109,9 +107,7 @@ impl Server {
             let mut state = self.state.lock().unwrap();
             if id == state.current_player {
               let buf = &state.players.get(&id).unwrap().buf;
-              let used = self.usedwords.lock().unwrap();
-              if buf.contains(&state.current_phrase) && self.words.contains(buf) && !used.contains(&buf) {
-                used.push(buf.to_string());
+              if buf.contains(&state.current_phrase) && self.words.contains(buf) {
                 let phrase = self
                   .phrases
                   .choose(&mut rand::thread_rng())
@@ -155,10 +151,8 @@ impl Server {
 }
 
 fn next_player(players: &HashMap<usize, ServerPlayer>, current: usize) -> usize {
-  let mut iter = players.iter().filter(|(_,p)| p.lives > 0);
-  // todo no players left also 1 player left !!!
-  let i = iter.position(|(id, _)| *id == current).unwrap();
-  match iter.nth(i + 1) {
+  let i = players.iter().position(|(id, _)| *id == current).unwrap();
+  match players.iter().nth(i + 1) {
     Some(i) => *i.0,
     None => 0,
   }
