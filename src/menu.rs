@@ -11,7 +11,7 @@ use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use figlet_rs::FIGfont;
 use chrono::{Duration, Utc, Datelike};
 use crate::Result;
-
+use crate::client::Client;
 
 pub fn menu() -> Result {
   let mut stdout = io::stdout();
@@ -51,7 +51,8 @@ pub fn menu() -> Result {
         .split(hchunks[0]);
       f.render_widget(Paragraph::new(logo.clone()), vchunks[0]);
       f.render_widget(
-        Paragraph::new("cum shit fart poop").block(Block::default().title("How To Play").borders(Borders::ALL)),
+        Paragraph::new("cum shit fart poop")
+          .block(Block::default().title("How To Play").borders(Borders::ALL)),
         vchunks[1],
       );
       f.render_widget(
@@ -78,7 +79,7 @@ pub fn menu() -> Result {
       f.render_widget(
         List::new(vec![
           option_item("Play".to_string(), 0, "Enter IP".to_string()),
-          option_item("Host".to_string(), 1, "Enter port".to_string())
+          option_item("Host".to_string(), 1, "Enter port".to_string()),
         ])
         .block(
           Block::default()
@@ -113,7 +114,7 @@ pub fn menu() -> Result {
             KeyCode::Enter => {
               match selected {
                 // todo
-                0 => {} // i forgore
+                0 => return Client::new().play("shit".to_string()), // i forgore
                 1 => {} // goofy server mechanics remember lmao poopy stinky
                 _ => {}
               }
