@@ -4,3 +4,6 @@ not allowed same name
 when host it also lets  you play 
 menu
 statitiiscts
+chat scrolling
+cool server animation ui thingy 
+server side game starting

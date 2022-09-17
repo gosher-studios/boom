@@ -12,6 +12,7 @@ use figlet_rs::FIGfont;
 use chrono::{Duration, Utc, Datelike};
 use crate::Result;
 use crate::client::Client;
+use crate::server::Server;
 
 pub fn menu() -> Result {
   let mut stdout = io::stdout();
@@ -114,8 +115,12 @@ pub fn menu() -> Result {
             KeyCode::Enter => {
               match selected {
                 // todo
-                0 => return Client::new().play("shit".to_string()), // i forgore
-                1 => {} // goofy server mechanics remember lmao poopy stinky
+                0 => return Client::new().play("shit".to_string(), buf.parse()?, terminal), // i forgore
+                1 => {
+                  disable_raw_mode()?;
+                  crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+                  return Server::new().host(buf.parse()?);
+                } // goofy server mechanics remember lmao poopy stinky
                 _ => {}
               }
             }

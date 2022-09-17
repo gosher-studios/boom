@@ -1,12 +1,10 @@
 use std::{io, thread, process};
-use std::net::TcpStream;
+use std::net::{TcpStream, SocketAddr};
 use std::sync::{Arc, Mutex};
 use tui::{Terminal, backend::CrosstermBackend};
 use tui::widgets::{Block, Borders, List, ListItem};
 use tui::layout::{Layout, Direction, Constraint};
-use crossterm::terminal::{
-  enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-};
+use crossterm::terminal::{disable_raw_mode, LeaveAlternateScreen};
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use chrono::{Utc, Duration};
 use crate::state::{State, StateChange, ClientPlayer};
@@ -29,8 +27,13 @@ impl Client {
     }
   }
 
-  pub fn play(mut self, name: String) -> Result {
-    let stream = TcpStream::connect("localhost:1234")?;
+  pub fn play(
+    mut self,
+    name: String,
+    ip: SocketAddr,
+    mut terminal: Terminal<CrosstermBackend<io::Stdout>>,
+  ) -> Result {
+    let stream = TcpStream::connect(ip)?;
     bincode::serialize_into(&stream, &name)?;
     let mut state = self.state.lock().unwrap();
     let id: usize = bincode::deserialize_from(&stream)?;
@@ -43,11 +46,11 @@ impl Client {
     let state = self.state.clone();
     let s = stream.try_clone()?;
     thread::spawn(move || -> Result {
-      let mut stdout = io::stdout();
-      enable_raw_mode()?;
-      crossterm::execute!(stdout, EnterAlternateScreen)?;
-      let backend = CrosstermBackend::new(stdout);
-      let mut terminal = Terminal::new(backend)?;
+      // let mut stdout = io::stdout();
+      // enable_raw_mode()?;
+      // crossterm::execute!(stdout, EnterAlternateScreen)?;
+      // let backend = CrosstermBackend::new(stdout);
+      // let mut terminal = Terminal::new(backend)?;
 
       loop {
         terminal.draw(|f| {
